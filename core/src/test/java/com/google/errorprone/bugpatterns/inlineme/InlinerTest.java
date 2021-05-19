@@ -1090,6 +1090,56 @@ public class InlinerTest {
         .doTest();
   }
 
+  @Test
+  public void testInlineWithLambdaExec() {
+    refactoringTestHelper
+            .allowBreakingChanges()
+            .addInputLines(
+                    "Client.java",
+                    "package com.example;",
+                    "import com.google.errorprone.annotations.InlineMe;",
+                    "public final class Client {",
+                    "  @Deprecated",
+                    "  public interface TextSupplier {",
+                    "     String text();",
+                    "  }",
+                    "  private String text;",
+                    "  private Client(String text) {",
+                    "     this.text = text;",
+                    "  }",
+                    "  @Deprecated",
+                    // Note: InlineMeSuggester will actually suggest the following
+                    "  @InlineMe(replacement = \"Client.client(supplier.text())\", imports={\"com.example.Client\"})",
+                    "  public static Client client(TextSupplier supplier) {",
+                    "    return client(supplier.text());",
+                    "  }",
+                    "  public static Client client(String text) {",
+                    "    return new Client(text);",
+                    "  }",
+                    "}")
+            .expectUnchanged()
+            .addInputLines(
+                    "Caller.java",
+                    "import com.example.Client;",
+                    "public final class Caller {",
+                    "  public void doTest() {",
+                    "    Client client = Client.client(() -> \"text\");",
+                    "  }",
+                    "}")
+            .addOutputLines(
+                    "out/Caller.java",
+                    "import com.example.Client;",
+                    "public final class Caller {",
+                    "  public void doTest() {",
+                    // Note: But the refactoring itself doesn't happen. In fact, in our real codebase, we get a
+                    // java.lang.ClassCastException: com.sun.tools.javac.code.Type$BottomType cannot be cast
+                    // to com.sun.tools.javac.code.Type$ArrayType
+                    "    Client client = Client.client(\"text\");",
+                    "  }",
+                    "}")
+            .doTest();
+  }
+
   private BugCheckerRefactoringTestHelper buildBugCheckerWithPrefixFlag(String prefix) {
     return BugCheckerRefactoringTestHelper.newInstance(Inliner.class, getClass())
         .setArgs("-XepOpt:" + PREFIX_FLAG + "=" + prefix);
